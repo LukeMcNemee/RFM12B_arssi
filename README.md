@@ -1,40 +1,70 @@
-RFM12B Library
-----------------
-By Felix Rusu (felix@lowpowerlab.com)
+enhanced RFM12B with ARSSI Library
+----------------------------------
+By Charles-Henri Hallard
 <br/>
-Based on the RFM12 driver from jeelabs.com (2009-02-09 <jc@wippler.nl>)
-<br/>
-http://opensource.org/licenses/mit-license.php
+Enhanced RFM12B with Analog RSSI reading RF module library for Arduino
 
-###Features:
-- easy API with a few simple functions for basic usage
-- 127 possible nodes on 256 possible networks
-- 128 bytes max message length
-- customizable transmit power (8 levels) for low-power transmission control
-- customizable air-Kbps rate allows fine tuning the transmission reliability vs speed (transmitting slower is more reliable but takes more time which implies more power usage)
-- Sleep/Wakeup functionality for power saving
-- Low battery detector with customizable low voltage threshold
-- Interrupt driven
-- Support for targeted ACK instead of broadcasted ACK (possible because of the new source byte in the header)
-encryption with XXTEA algorithm by David Wheeler, adapted from http://en.wikipedia.org/wiki/XXTEA
-Support for these chips: ATMega8 family (ATmega168, ATMega328) ATMega2560, ATMega1280, ATMega644P, ATTiny84, ATTiny44, ATMega32u4. So far only tested on ATMega 328/P
-- wireless programming (for more info click [here](http://lowpowerlab.com/blog/2013/04/18/moteino-wireless-programming-source-code/), [here](http://lowpowerlab.com/?p=643) and [here](http://lowpowerlab.com/?p=669))
-- the library needed for wireless programming is now [here](https://github.com/LowPowerLab/WirelessProgramming), install it in your Arduino/libraries folder (WirelessHEX for RFM12B)
+##License
+Same as the original libraries
+
+You are free to share and adapt. But you need to give attribution and use the same license to redistribute.
+
+For any explanation see RFM12 module see http://www.hoperf.com/rf/fsk_module/RFM12B.htm
+
+Code based on following datasheet http://www.hoperf.com/upload/rf/RFM12B.pdf
+
+##Features
+List of features implemented in this library:
+
+- Module detection (can check if module is present on board or not)
+- Accurate Analog RSSI measurement (need hardware hack by soldering one wire)
+- Dynamic use of Hardware IRQ (D2 or D3)
+- Dynamic use of custom pin for Chip Select 
+
+This is an initial release, it could contain bugs, but works fine for now. Please let me know if you find issues.
 
 ###Installation
-Copy the content of this library in the "Arduino/libraries/RFM12B" folder.
+Copy the content of this library in the "Arduino/libraries/RFM12B_arssi" folder.
 <br />
 To find your Arduino folder go to File>Preferences in the Arduino IDE.
 <br/>
-See [this tutorial](http://learn.adafruit.com/arduino-tips-tricks-and-techniques/arduino-libraries) on Arduino libraries.
+See [this tutorial][1] on Arduino libraries.
+<br/>
 
-###Saple usage
-- [Sender](https://github.com/LowPowerLab/RFM12B/blob/master/Examples/Send/Send.ino)
-- [Receiver](https://github.com/LowPowerLab/RFM12B/blob/master/Examples/Receive/Receive.ino)
-- More examples in the [Examples folder](https://github.com/LowPowerLab/RFM12B/tree/master/Examples)
+###Possible issues
+- Analog RSSI signal differs from modules (location and values)
 
 
-###TODOs (in order of priority):
-- Support automatic ACK handling
-- Refactor changing the SPI CS signal
-- Add support for hosting multiple radios on 1 MCU
+###Sample usage
+- [RFM12B_Struct_gateway_arssi][12] Receive data then read RSSI and send back to node RSSI value
+- [RFM12B_Struct_node_arssi][13] Read some values, send to gateway then receive RSSI value
+
+##Blog dedicated post
+See this [post][5] for information
+
+##Why
+- I have long used Felix's RFM12B library, but I needed more features.
+
+##Reference
+Thanks to all contributors starting Jean-Claude Wippler from [jeelabs][6] for writing original Library.
+
+- Felix Russu from [lowpowerlab][7] for providing more flexibility to it.
+- Strobotics for [RFM12B hardware interface][8] with some ARSSI description.
+- Marc for [Reading reading ARSSI][9] signal of RFM12B and RFM12B chipset [advanced][10] description.
+- Scott Daniels for [Secret Arduino Voltmeter][11] Measure Battery Voltage.
+
+##Misc
+ See news and other projects on my [blog][4] 
+ 
+[1]: http://learn.adafruit.com/arduino-tips-tricks-and-techniques/arduino-libraries
+[4]: http://hallard.me
+[5]: http://hallard.me/RFM12B_arssi-library/
+[6]: http://jeelabs.org/about/
+[7]: http://lowpowerlab.com/about/
+[8]: http://blog.strobotics.com.au/2008/06/17/rfm12-tutorial-part2/
+[9]: http://http://scurvyrat.com/2011/06/14/reading-the-arssi-pin-on-the-si4221hoperf-12b/
+[10]: http://scurvyrat.com/2011/06/06/silicon-labs-chips/
+[11]: http://provideyourown.com/2012/secret-arduino-voltmeter-measure-battery-voltage/
+[12]: https://github.com/hallard/RFM12B_arssi/blob/master/Examples/RFM12B_Struct_gateway_arssi/RFM12B_Struct_gateway_arssi.ino
+[13]: https://github.com/hallard/RFM12B_arssi/blob/master/Examples/RFM12B_Struct_node_arssi/RFM12B_Struct_node_arssi.ino
+

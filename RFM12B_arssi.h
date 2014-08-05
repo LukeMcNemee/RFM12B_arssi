@@ -1,25 +1,42 @@
-// RFM12B driver definitions
-// http://opensource.org/licenses/mit-license.php
-// 2012-12-12 (C) felix@lowpowerlab.com
+// **********************************************************************************
+// Driver definition for HopeRF RFM12B RF Module
+// **********************************************************************************
+// License is the same as original libraries
+//
+// For any explanation see RFM12 module 
+// http://www.hoperf.com/rf/fsk_module/RFM12B.htm
+//
+// Code based on following datasheet
+// http://www.hoperf.com/upload/rf/RFM12B.pdf
+//
 // Based on the RFM12 driver from jeelabs.com (2009-02-09 <jc@wippler.nl>)
+// modified 2012-12-12 (C) felix@lowpowerlab.com from LowPowerLab.com
+// 
+// Modified by Charles-Henri Hallard (http://hallard.me)
+//
+// History : V1.00 2014-08-01 - First release
+//                              Added dynamic Chip select Pin selection 
+//                              Added dynamic IRQ pin selection 
+//                              Added check that RFM12B module is present
+//                              Added true ARSSI reading 
+//                                    Need hardware hack depending on module type
+//
+// All text above must be included in any redistribution.
+//
+// **********************************************************************************
 
-#ifndef RFM12B_h
-#define RFM12B_h
+#ifndef RFM12B_ARSSI_H
+#define RFM12B_ARSSI_H
 
 #include <inttypes.h>
 #include <avr/io.h>
 #include <util/crc16.h>
 #include <avr/eeprom.h>
 #include <avr/sleep.h>
-#if ARDUINO >= 100
-  #include <Arduino.h> // Arduino 1.0
-#else
-  #include <WProgram.h> // Arduino 0022
-#endif
-
+#include <Arduino.h> 
 
 ///RF12 Driver version
-#define OPTIMIZE_SPI       1  // uncomment this to write to the RFM12B @ 8 Mhz
+// #define OPTIMIZE_SPI       1  // uncomment this to write to the RFM12B @ 8 Mhz
 
 /// RF12 CTL bit mask.
 //#define RF12_HDR_CTL    0x80
@@ -33,6 +50,7 @@
 //#define RF12_SOURCEID   rf12_hdr & RF12_HDR_MASK
 
 /// RF12 Maximum message size in bytes.
+/// Ram needed 
 #define RF12_MAXDATA    128
 /// Max transmit/receive buffer: 4 header + data + 2 crc bytes
 #define RF_MAX          (RF12_MAXDATA + 6)
@@ -43,7 +61,7 @@
 #define RF12_868MHZ     2
 #define RF12_915MHZ     3
 
-//Low batteery threshold (eg 2v25 = 2.25V)
+//Low battery threshold (eg 2v25 = 2.25V)
 #define RF12_2v25       0
 #define RF12_2v55       3
 #define RF12_2v65       4
@@ -51,6 +69,37 @@
 #define RF12_3v05       8
 #define RF12_3v15       9
 #define RF12_3v25       10
+
+
+// enable code compilation for ARSSI readings
+#define RF12_ARSSI_ANALOG
+
+// When reading ARSSI from ADC we need to know
+// device we're on because values differs from
+// one chip to another, can be 
+// 300mV to 1000mV
+// 450mV to 1150mV
+// 600mv to 1300mV
+// we need to pass this parameter when we want to set ARSSI Idle value (one time before init)
+// ARSSI value
+#define RF12_ARSSI_300mV  300
+#define RF12_ARSSI_450mV  450
+#define RF12_ARSSI_600mV  600
+#define RF12_ARSSI_maxmV  700 // max is always ARSSI value + 700mV
+
+#define RF12_ARSSI_MAX        -65   // Arssi maximal value
+#define RF12_ARSSI_MIN        -100  // Arssi minimal value
+#define RF12_ARSSI_ABOVE_MAX  -64   // Arssi value above maximal value
+#define RF12_ARSSI_BELOW_MIN  -101  // Arssi value below minimal value
+#define RF12_ARSSI_RECV       -102  // Can't get Arssi because we're not in idle mode
+#define RF12_ARSSI_BAD_IDLE   -103  // idle mv def is not in RF12_ARSSI_300mV...RF12_ARSSI_600mV
+#define RF12_ARSSI_DISABLED   -104  // Analog RSSI not used 
+#define RF12_ARSSI_NB_BYTES   -110  // Can't get Arssi because we do not have enough bytes received
+#define RF12_ARSSI_MIN_BYTES  6     // Number of bytes we need to receive to rely on Arssi value
+
+// ARSSI Config bit mask values
+#define RF12_ARSSI_ANALOG_PIN_MASK  0x0F
+#define RF12_ARSSI_NO_ADC_MASK      0x10
 
 #define RF12_HDR_IDMASK      0x7F
 #define RF12_HDR_ACKCTLMASK  0x80
@@ -76,67 +125,15 @@
 /// Shorthand for first RF12 data byte in rf12_buf.
 #define rf12_data       (rf12_buf + 4)
 
-
 // pin change interrupts are currently only supported on ATmega328's
-// #define PINCHG_IRQ 1    // uncomment this to use pin-change interrupts
+//#define PINCHG_IRQ 1    // uncomment this to use pin-change interrupts
+                          // and set RFM_DEFAULT_IRQ to pin value
 
-// pins used for the RFM12B interface - yes, there *is* logic in this madness:
-//  - leave RFM_IRQ set to the pin which corresponds with INT0, because the
-//    current driver code will use attachInterrupt() to hook into that
-//  - (new) you can now change RFM_IRQ, if you also enable PINCHG_IRQ - this
-//    will switch to pin change interrupts instead of attach/detachInterrupt()
-//  - use SS_DDR, SS_PORT, and SS_BIT to define the pin you will be using as
-//    select pin for the RFM12B (you're free to set them to anything you like)
-//  - please leave SPI_SS, SPI_MOSI, SPI_MISO, and SPI_SCK as is, i.e. pointing
-//    to the hardware-supported SPI pins on the ATmega, *including* SPI_SS !
-#if defined(__AVR_ATmega2560__) || defined(__AVR_ATmega1280__)
-  #define RFM_IRQ     2
-  #define SS_DDR      DDRB
-  #define SS_PORT     PORTB
-  #define SS_BIT      0
-  #define SPI_SS      53    // PB0, pin 19
-  #define SPI_MOSI    51    // PB2, pin 21
-  #define SPI_MISO    50    // PB3, pin 22
-  #define SPI_SCK     52    // PB1, pin 20
-#elif defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
-  #define RFM_IRQ     10
-  #define SS_DDR      DDRB
-  #define SS_PORT     PORTB
-  #define SS_BIT      4
-  #define SPI_SS      4
-  #define SPI_MOSI    5
-  #define SPI_MISO    6
-  #define SPI_SCK     7
-#elif defined(__AVR_ATtiny84__) || defined(__AVR_ATtiny44__)
-  #define RFM_IRQ     2
-  #define SS_DDR      DDRB
-  #define SS_PORT     PORTB
-  #define SS_BIT      1
-  #define SPI_SS      1     // PB1, pin 3
-  #define SPI_MISO    4     // PA6, pin 7
-  #define SPI_MOSI    5     // PA5, pin 8
-  #define SPI_SCK     6     // PA4, pin 9
-#elif defined(__AVR_ATmega32U4__) //Arduino Leonardo, MoteinoLeo
-  #define RFM_IRQ     0	    // PD0, INT0, Digital3 
-  #define SS_DDR      DDRB
-  #define SS_PORT     PORTB
-  //OLD from Jeelib: #define SS_BIT      6	    // Dig10, PB6
-  #define SS_BIT      0	    // Dig17, PB0
-  #define SPI_SS      17    // PB0, pin 8, Digital17
-  #define SPI_MISO    14    // PB3, pin 11, Digital14
-  #define SPI_MOSI    16    // PB2, pin 10, Digital16
-  #define SPI_SCK     15    // PB1, pin 9, Digital15
-#else
-  // ATmega168, ATmega328, etc.
-  #define RFM_IRQ     2
-  #define SS_DDR      DDRB
-  #define SS_PORT     PORTB
-  #define SS_BIT      2     // for PORTB: 2 = d.10, 1 = d.9, 0 = d.8
-  #define SPI_SS      10    // PB2, pin 16
-  #define SPI_MOSI    11    // PB3, pin 17
-  #define SPI_MISO    12    // PB4, pin 18
-  #define SPI_SCK     13    // PB5, pin 19
-#endif 
+#define RFM_DEFAULT_IRQ 2     // default IRQ 2 (can be changed by SetIRQ)
+#define SPI_SS          10    // D10 
+#define SPI_MOSI        11    // PB3, pin 17
+#define SPI_MISO        12    // PB4, pin 18
+#define SPI_SCK         13    // PB5, pin 19
 
 // RF12 command codes
 #define RF_RECEIVER_ON  0x82DD
@@ -159,9 +156,18 @@ enum {
   TXPRE1, TXPRE2, TXPRE3, TXSYN1, TXSYN2,
 };
 
-extern volatile uint8_t rf12_buf[RF_MAX];          // recv/xmit buf, including hdr & crc bytes
+extern volatile uint8_t rf12_buf[RF_MAX]; // recv/xmit buf, including hdr & crc bytes
 class RFM12B
 {
+  #ifdef RF12_ARSSI_ANALOG
+    static volatile uint16_t arssi_idle;  // number of mV read on arssi pin when not receiving 
+                                          // depends on chip but usually it is 300, 450 or 600 mV
+    static volatile uint16_t arssi;       // number of data bytes in rf12_buf
+    static volatile uint8_t arssi_bytes;  // analog rssi values readed
+    static volatile uint8_t arssi_config; // Used to indicate no ADC conversion should occurs and Analog pin
+
+  #endif 
+
   static volatile uint8_t rxfill;           // number of data bytes in rf12_buf
   static volatile int8_t rxstate;           // current transceiver state
   static volatile uint16_t rf12_crc;        // running crc value
@@ -169,17 +175,19 @@ class RFM12B
   static uint32_t cryptKey[4];              // encryption key to use
   static long rf12_seq;                     // seq number of encrypted packet (or -1)
   static uint8_t cs_pin;                    // chip select pin
-  void (*crypter)(bool);                    // does en-/decryption (null if disabled)
+  static uint8_t irq_pin;                   // hardware irq pin ( 2 or 3)
+  void (*crypter)(bool);                   // does en-/decryption (null if disabled)
   static uint8_t Byte(uint8_t out);
   static uint16_t XFERSlow(uint16_t cmd);
   static void XFER(uint16_t cmd);
-  
+   
   void SPIInit();
   
 	public:
     //constructor
     RFM12B():Data(rf12_data),DataLen(&rf12_buf[3]){}
 
+		volatile static bool noADC; 			// Used to indicate no ADC conversion should occurs
     static uint8_t networkID;         // network group
     static uint8_t nodeID;            // address of this node
     static const byte DATAMAXLEN;
@@ -188,13 +196,25 @@ class RFM12B
     
     static void InterruptHandler();
     
+    void SetCS(uint8_t pin=SPI_SS);
+    void SetIRQ(uint8_t irqPin = RFM_DEFAULT_IRQ);
+    bool isPresent(uint8_t cspin=SPI_SS, uint8_t irqpin=RFM_DEFAULT_IRQ) ;
+
     //Defaults: Group: 0xAA=170, transmit power: 0(max), KBPS: 38.3Kbps (air transmission baud - has to be same on all radios in same group)
   	void Initialize(uint8_t nodeid, uint8_t freqBand, uint8_t groupid=0xAA, uint8_t txPower=0, uint8_t airKbps=0x08, uint8_t lowVoltageThreshold=RF12_2v75);
-    void SetCS(uint8_t pin);
     void ReceiveStart();
     bool ReceiveComplete();
     bool CanSend();
     uint16_t Control(uint16_t cmd);
+		 
+    
+   #ifdef RF12_ARSSI_ANALOG
+    void noRSSI(bool _state);
+    void SetRSSI(uint8_t analog_pin = 0, uint16_t _arssi_idle = 0);
+    uint16_t getRSSIIdle() { return arssi_idle; }
+    uint8_t getRSSIAnalogPin() { return arssi_config & RF12_ARSSI_ANALOG_PIN_MASK ; }
+    int8_t ReadARSSI(uint16_t);
+   #endif
     
     void SendStart(uint8_t toNodeId, bool requestACK=false, bool sendACK=false);
     void SendStart(uint8_t toNodeId, const void* sendBuf, uint8_t sendLen, bool requestACK=false, bool sendACK=false, uint8_t waitMode=SLEEP_MODE_STANDBY);
@@ -210,6 +230,7 @@ class RFM12B
     volatile uint8_t * GetData();
     uint8_t GetDataLen(); //how many bytes were received
     uint8_t GetSender();
+    uint8_t GetNetworkID() { return rf12_grp; };
     bool LowBattery();
     bool ACKRequested();
     bool ACKReceived(uint8_t fromNodeID=0);
