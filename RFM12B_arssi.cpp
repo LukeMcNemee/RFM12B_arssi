@@ -216,9 +216,10 @@ bool RFM12B::isPresent(uint8_t cspin, uint8_t irqpin)
 
 void RFM12B::SPIInit() 
 {
-  if (cs_pin != 10 )
+  // avoid Arduino to be SPI slave setting SS Pin as output
+  if (cs_pin != SS )
   {
-    pinMode(10, OUTPUT); // avoid Arduino to be SPI slave
+    pinMode(SS, OUTPUT); 
   //digitalWrite(10, 1);
   }
 
