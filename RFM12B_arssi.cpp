@@ -73,16 +73,25 @@ Comments: This call should be done BEFORE calling the Initialize
 ====================================================================== */
 void RFM12B::SetIRQ(uint8_t irqPin)
 {
-  //  IRQ 3
-  if (irqPin != 3)
-    irq_pin = RFM_DEFAULT_IRQ;
-  else
+#if defined(__AVR_ATmega168__) || defined(__AVR_ATmega328P__) || defined(__AVR_ATmega88) || defined(__AVR_ATmega8__) || defined(__AVR_ATmega88__)
+  //  External IRQ authorized are D2 (INT0) or D3 (INT1)
+  if (irqPin==2 || irqPin==3)
     irq_pin = irqPin;
+  else
+    irq_pin = RFM_DEFAULT_IRQ;
+#elif defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
+  //  External IRQ authorized are D10 (INT0), D11 (INT1) or D2 (INT2)
+  if (irqPin==10 || irqPin==11 || irqPin==2)
+    irq_pin = irqPin;
+  else
+    irq_pin = RFM_DEFAULT_IRQ;
+#else
+  #error Target not supported for HW Interrupts
+#endif
   
   // Configure pin as input with pull up
   pinMode(irq_pin, INPUT);
   digitalWrite(irq_pin, 1);
-
 }
 
 /* ======================================================================
@@ -122,63 +131,30 @@ void RFM12B::ConfigureInterrupts()
         bitClear(PCMSK1, RFM_DEFAULT_IRQ - 14);
     #endif
   #else
-    if (nodeID != 0)
-      attachInterrupt(irq_pin-2, RFM12B::InterruptHandler, LOW);
-    else
-      detachInterrupt(irq_pin-2);
-  #endif
-}
-
-
-/* ======================================================================
-Function: DisableInterrupts
-Purpose : Disable IRQ for Module 
-Input   : -
-Output  : -
-Comments: Used to avoid reception when dealing with previous receive or
-          when we're in sleep mode
-====================================================================== */
-/*
-void RFM12B::DisableInterrupts() 
-{
-  uint8_t c=0;
-  #if PINCHG_IRQ
-    #if RFM_DEFAULT_IRQ < 8
-      bitClear(PCMSK2, RFM_DEFAULT_IRQ);     
-    #elif RFM_DEFAULT_IRQ < 14
-      bitClear(PCMSK0, RFM_DEFAULT_IRQ - 8);  
+    #if defined(__AVR_ATmega168__) || defined(__AVR_ATmega328P__) || defined(__AVR_ATmega88) || defined(__AVR_ATmega8__) || defined(__AVR_ATmega88__)
+      //  External IRQ authorized are D2 (INT0) or D3 (INT1)
+      if (nodeID != 0)
+        // INT0 or INT1
+        attachInterrupt(irq_pin-2, RFM12B::InterruptHandler, LOW);
+      else
+        // INT0 or INT1
+        detachInterrupt(irq_pin-2);
+    #elif defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
+      //  IRQ authorized are D10 (INT0), D11 (INT1) or D2 (INT2)
+      if (irqPin==10 || irqPin==11 || irqpin==2)
+      {
+        if (nodeID != 0)
+          // INT0 or INT1 for pin D10/D11 and INT3 for pin D2
+          attachInterrupt(irqpin==2?3:irq_pin-10, RFM12B::InterruptHandler, LOW);
+        else
+          // INT0 or INT1 for pin D10/D11 and INT3 for pin D2
+          detachInterrupt(irqpin==2?3:irq_pin-10);
+      }
     #else
-      bitClear(PCMSK1, RFM_DEFAULT_IRQ - 14);
+      #error Target not supported for HW Interrupts
     #endif
-  #else
-    bitClear(EIMSK, irq_pin==3?INT1:INT0);
   #endif
 }
-*/
-/* ======================================================================
-Function: EnableInterrupts
-Purpose : Enable back IRQ for Module 
-Input   : -
-Output  : -
-Comments: Used after we wake up or finished dealing with previous task
-====================================================================== */
-/*
-void RFM12B::EnableInterrupts() 
-{
-  uint8_t c=0;
-  #if PINCHG_IRQ
-    #if RFM_DEFAULT_IRQ < 8
-      bitSet(PCMSK2, RFM_DEFAULT_IRQ);     
-    #elif RFM_DEFAULT_IRQ < 14
-      bitSet(PCMSK0, RFM_DEFAULT_IRQ - 8);  
-    #else
-      bitSet(PCMSK1, RFM_DEFAULT_IRQ - 14);
-    #endif
-  #else
-    bitSet(EIMSK, irq_pin==3?INT1:INT0);
-  #endif
-}
-*/
 
 /* ======================================================================
 Function: isPresent
@@ -370,18 +346,14 @@ bool RFM12B::Initialize(uint8_t ID, uint8_t freqBand, uint8_t networkid, uint8_t
 // access to the RFM12B internal registers with interrupts disabled
 uint16_t RFM12B::Control(uint16_t cmd) {
 #ifdef EIMSK
-    //bitClear(EIMSK, irq_pin - 2);
     cli();
     uint16_t r = XFERSlow(cmd);
     sei();
-    //bitSet(EIMSK, irq_pin - 2);
 #else
   // ATtiny
-  //bitClear(GIMSK, INT0);
   cli();
   uint16_t r = XFERSlow(cmd);
   sei();
-  //bitSet(GIMSK, INT0);
 #endif
     return r;
 }
