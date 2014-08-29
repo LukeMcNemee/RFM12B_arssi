@@ -18,8 +18,11 @@ List of features implemented in this library:
 
 - Module detection (can check if module is present on board or not)
 - Accurate Analog RSSI measurement (need hardware hack by soldering one wire)
-- Dynamic use of Hardware IRQ (D2 or D3)
+- Dynamic use of Hardware IRQ (D2/INT0 or D3/INT1) for Atmega328
+- Dynamic use of Hardware IRQ (D10/INT0, D11/INT1 or D2/INT2) for Atmega1284
 - Dynamic use of custom pin for Chip Select 
+- AtMega 1284p External Interrupt compatibility (use Felix's [Mega Core][14] pin mapping for this)
+- Added time-out to initialize function to avoid lockup
 
 This is an initial release, it could contain bugs, but works fine for now. Please let me know if you find issues.
 
@@ -67,4 +70,5 @@ Thanks to all contributors starting Jean-Claude Wippler from [jeelabs][6] for wr
 [11]: http://provideyourown.com/2012/secret-arduino-voltmeter-measure-battery-voltage/
 [12]: https://github.com/hallard/RFM12B_arssi/blob/master/Examples/RFM12B_Struct_gateway_arssi/RFM12B_Struct_gateway_arssi.ino
 [13]: https://github.com/hallard/RFM12B_arssi/blob/master/Examples/RFM12B_Struct_node_arssi/RFM12B_Struct_node_arssi.ino
+[14]: https://github.com/LowPowerLab/Moteino/tree/master/MEGA/Core
 
