@@ -180,6 +180,9 @@ class RFM12B
   static uint8_t Byte(uint8_t out);
   static uint16_t XFERSlow(uint16_t cmd);
   static void XFER(uint16_t cmd);
+  static void DisableInterrupts(); 
+  static void EnableInterrupts();
+  static void ConfigureInterrupts();
    
   void SPIInit();
   
@@ -201,7 +204,7 @@ class RFM12B
     bool isPresent(uint8_t cspin=SPI_SS, uint8_t irqpin=RFM_DEFAULT_IRQ) ;
 
     //Defaults: Group: 0xAA=170, transmit power: 0(max), KBPS: 38.3Kbps (air transmission baud - has to be same on all radios in same group)
-  	void Initialize(uint8_t nodeid, uint8_t freqBand, uint8_t groupid=0xAA, uint8_t txPower=0, uint8_t airKbps=0x08, uint8_t lowVoltageThreshold=RF12_2v75);
+  	bool Initialize(uint8_t nodeid, uint8_t freqBand, uint8_t groupid=0xAA, uint8_t txPower=0, uint8_t airKbps=0x08, uint8_t lowVoltageThreshold=RF12_2v75);
     void ReceiveStart();
     bool ReceiveComplete();
     bool CanSend();
@@ -210,7 +213,7 @@ class RFM12B
     
    #ifdef RF12_ARSSI_ANALOG
     void noRSSI(bool _state);
-    void SetRSSI(uint8_t analog_pin = 0, uint16_t _arssi_idle = 0);
+    void SetRSSI(uint8_t analog_pin = A0, uint16_t _arssi_idle = 0);
     uint16_t getRSSIIdle() { return arssi_idle; }
     uint8_t getRSSIAnalogPin() { return arssi_config & RF12_ARSSI_ANALOG_PIN_MASK ; }
     int8_t ReadARSSI(uint16_t);
