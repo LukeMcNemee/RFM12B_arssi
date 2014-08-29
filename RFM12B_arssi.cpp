@@ -57,6 +57,9 @@ Comments: This call should be done BEFORE calling the Initialize
 void RFM12B::SetCS(uint8_t arduinoPin)
 {
   cs_pin = arduinoPin;
+
+  // Configure pin as output
+  pinMode(cs_pin, OUTPUT);
 }
 
 /* ======================================================================
@@ -75,9 +78,108 @@ void RFM12B::SetIRQ(uint8_t irqPin)
     irq_pin = RFM_DEFAULT_IRQ;
   else
     irq_pin = irqPin;
+  
+  // Configure pin as input with pull up
+  pinMode(irq_pin, INPUT);
+  digitalWrite(irq_pin, 1);
+
 }
 
- 
+/* ======================================================================
+Function: ConfigureInterrupts
+Purpose : Configure port and IRQ 
+Input   : -
+Output  : -
+Comments: -
+====================================================================== */
+void RFM12B::ConfigureInterrupts()
+{
+  // Pin change IRQ
+  #if PINCHG_IRQ
+    #if RFM_DEFAULT_IRQ < 8
+      if (nodeID != 0) {
+        bitClear(DDRD, RFM_DEFAULT_IRQ);      // input
+        bitSet(PORTD, RFM_DEFAULT_IRQ);       // pull-up
+        bitSet(PCMSK2, RFM_DEFAULT_IRQ);      // pin-change
+        bitSet(PCICR, PCIE2);         // enable
+      } else
+        bitClear(PCMSK2, RFM_DEFAULT_IRQ);
+    #elif RFM_DEFAULT_IRQ < 14
+      if (nodeID != 0) {
+        bitClear(DDRB, RFM_DEFAULT_IRQ - 8);  // input
+        bitSet(PORTB, RFM_DEFAULT_IRQ - 8);   // pull-up
+        bitSet(PCMSK0, RFM_DEFAULT_IRQ - 8);  // pin-change
+        bitSet(PCICR, PCIE0);         // enable
+      } else
+        bitClear(PCMSK0, RFM_DEFAULT_IRQ - 8);
+    #else
+      if (nodeID != 0) {
+        bitClear(DDRC, RFM_DEFAULT_IRQ - 14); // input
+        bitSet(PORTC, RFM_DEFAULT_IRQ - 14);  // pull-up
+        bitSet(PCMSK1, RFM_DEFAULT_IRQ - 14); // pin-change
+        bitSet(PCICR, PCIE1);         // enable
+      } else
+        bitClear(PCMSK1, RFM_DEFAULT_IRQ - 14);
+    #endif
+  #else
+    if (nodeID != 0)
+      attachInterrupt(irq_pin-2, RFM12B::InterruptHandler, LOW);
+    else
+      detachInterrupt(irq_pin-2);
+  #endif
+}
+
+
+/* ======================================================================
+Function: DisableInterrupts
+Purpose : Disable IRQ for Module 
+Input   : -
+Output  : -
+Comments: Used to avoid reception when dealing with previous receive or
+          when we're in sleep mode
+====================================================================== */
+/*
+void RFM12B::DisableInterrupts() 
+{
+  uint8_t c=0;
+  #if PINCHG_IRQ
+    #if RFM_DEFAULT_IRQ < 8
+      bitClear(PCMSK2, RFM_DEFAULT_IRQ);     
+    #elif RFM_DEFAULT_IRQ < 14
+      bitClear(PCMSK0, RFM_DEFAULT_IRQ - 8);  
+    #else
+      bitClear(PCMSK1, RFM_DEFAULT_IRQ - 14);
+    #endif
+  #else
+    bitClear(EIMSK, irq_pin==3?INT1:INT0);
+  #endif
+}
+*/
+/* ======================================================================
+Function: EnableInterrupts
+Purpose : Enable back IRQ for Module 
+Input   : -
+Output  : -
+Comments: Used after we wake up or finished dealing with previous task
+====================================================================== */
+/*
+void RFM12B::EnableInterrupts() 
+{
+  uint8_t c=0;
+  #if PINCHG_IRQ
+    #if RFM_DEFAULT_IRQ < 8
+      bitSet(PCMSK2, RFM_DEFAULT_IRQ);     
+    #elif RFM_DEFAULT_IRQ < 14
+      bitSet(PCMSK0, RFM_DEFAULT_IRQ - 8);  
+    #else
+      bitSet(PCMSK1, RFM_DEFAULT_IRQ - 14);
+    #endif
+  #else
+    bitSet(EIMSK, irq_pin==3?INT1:INT0);
+  #endif
+}
+*/
+
 /* ======================================================================
 Function: isPresent
 Purpose : try to detect RFM12B device connected to SPI bus 
@@ -97,34 +199,39 @@ bool RFM12B::isPresent(uint8_t cspin, uint8_t irqpin)
   // Init RFM12B module
   // whatever values here, the real init should be done later
   // We just need to init the device
-  Initialize(0, RF12_433MHZ);
-
-  // Clock output (1.66MHz), Low Voltage threshold (3.75V)
-  // we will change the Low Voltage threshold to the highest 
-  // value we can, as the module is powered by 3.3V the bit
-  // indicating low voltage should now be set because at 3.3V
-  // we are under 3.75V
-  Control(0xC04F); 
-  
-  // Wait the voltage comparison to settle ?
-  // I do not have any idea if needed, but it can't hurt
-  delay(10);
-
-  // Check if module is low battery ?
-  if ( LowBattery() )
+  if ( Initialize(1, RF12_433MHZ) )
   {
-    // Here we can have false detection in case of NRF24 plugged
-    // since we just check SPI return on one bit (LowVoltage)
-    // Clock output (1.66MHz), Low Voltage threshold (2.25V)
-    // So set voltage detection to test inverted bit
-    Control(0xC040); 
 
-    delay(10);
+    // Clock output (1.66MHz), Low Voltage threshold (3.75V)
+    // we will change the Low Voltage threshold to the highest 
+    // value we can, as the module is powered by 3.3V the bit
+    // indicating low voltage should now be set because at 3.3V
+    // we are under 3.75V
+    Control(0xC04F); 
     
-    // Check if module is no more low battery ?
-    // this time sounds we got a RFM12B module
-    if ( !LowBattery() )
-      found = true;
+    // Wait the voltage comparison to settle ?
+    // I do not have any idea if needed, but it can't hurt
+    delay(10);
+
+    // Check if module is low battery ?
+    if ( LowBattery() )
+    {
+      // Here we can have false detection in case of NRF24 plugged
+      // since we just check SPI return on one bit (LowVoltage)
+      // Clock output (1.66MHz), Low Voltage threshold (2.25V)
+      // So set voltage detection to test inverted bit
+      Control(0xC040); 
+
+      delay(10);
+      
+      // Check if module is no more low battery ?
+      // this time sounds we got a RFM12B module
+      if ( !LowBattery() )
+        found = true;
+    }
+    
+    // Adjust low battery voltage to POR value
+    Control(0xC000);
   }
 
   return found;
@@ -133,10 +240,14 @@ bool RFM12B::isPresent(uint8_t cspin, uint8_t irqpin)
 
 void RFM12B::SPIInit() 
 {
+  if (cs_pin != 10 )
+  {
+    pinMode(10, OUTPUT); // avoid Arduino to be SPI slave
+  //digitalWrite(10, 1);
+  }
+
   pinMode(cs_pin, OUTPUT);
   digitalWrite(cs_pin, 1);
-  pinMode(10, OUTPUT); // avoid Arduino to be SPI slave
-  digitalWrite(10, 1);
   pinMode(SPI_MOSI, OUTPUT);
   pinMode(SPI_MISO, INPUT);
   pinMode(SPI_SCK, OUTPUT);
@@ -166,10 +277,12 @@ uint16_t RFM12B::XFERSlow(uint16_t cmd) {
 #if F_CPU > 10000000
   bitSet(SPCR, SPR0);
 #endif
+  //DisableInterrupts();
   digitalWrite(cs_pin, 0);
   uint16_t reply = Byte(cmd >> 8) << 8;
   reply |= Byte(cmd);
   digitalWrite(cs_pin, 1);
+  //EnableInterrupts();
 #if F_CPU > 10000000
   bitClear(SPCR, SPR0);
 #endif
@@ -179,14 +292,19 @@ uint16_t RFM12B::XFERSlow(uint16_t cmd) {
 void RFM12B::XFER(uint16_t cmd) {
 #if OPTIMIZE_SPI
   // writing can take place at full speed, even 8 MHz works
+  //DisableInterrupts();
   digitalWrite(cs_pin, 0);
+
   Byte(cmd >> 8) << 8;
   Byte(cmd);
   digitalWrite(cs_pin, 1);
+  //EnableInterrupts();
 #else
   XFERSlow(cmd);
 #endif
 }
+
+
 
 // Call this once with params:
 // - node ID (0-31)
@@ -195,11 +313,15 @@ void RFM12B::XFER(uint16_t cmd) {
 // - txPower [optional - default = 0 (max)] (7 is min value)
 // - AirKbps [optional - default = 38.31Kbps]
 // - lowVoltageThreshold [optional - default = RF12_2v75]
-void RFM12B::Initialize(uint8_t ID, uint8_t freqBand, uint8_t networkid, uint8_t txPower, uint8_t airKbps, uint8_t lowVoltageThreshold)
+bool RFM12B::Initialize(uint8_t ID, uint8_t freqBand, uint8_t networkid, uint8_t txPower, uint8_t airKbps, uint8_t lowVoltageThreshold)
 {
-  //while(millis()<60);
-  //cs_pin = SS_BIT;
+  unsigned long start_to;  
   
+  // since we can call this several times, verify that we clear all interrupts before restarting
+  // Calling ConfigureInterrupts with NodeID=0 disable them
+  nodeID = 0;
+  
+  ConfigureInterrupts();
   nodeID = ID;
   networkID = networkid;
   SPIInit();
@@ -208,8 +330,15 @@ void RFM12B::Initialize(uint8_t ID, uint8_t freqBand, uint8_t networkid, uint8_t
   
   // wait until RFM12B is out of power-up reset, this takes several *seconds*
   XFER(RF_TXREG_WRITE); // in case we're still in OOK mode
-  while (digitalRead(irq_pin) == 0)
+  
+  #define TIME_OUT 200
+  start_to = millis();
+
+  while (digitalRead(irq_pin)==0 && millis()-start_to < TIME_OUT) 
     XFER(0x0000);
+
+  if (millis()-start_to >= TIME_OUT) 
+    return (false);
 
   XFER(0x80C7 | (freqBand << 4)); // EL (ena TX), EF (ena RX FIFO), 12.0pF 
   XFER(0xA640); // Frequency is exactly 434/868/915MHz (whatever freqBand is)
@@ -231,52 +360,28 @@ void RFM12B::Initialize(uint8_t ID, uint8_t freqBand, uint8_t networkid, uint8_t
   XFER(0xC043); // Clock output (1.66MHz), Low Voltage threshold (2.55V)
 
   rxstate = TXIDLE;
-// Pin change IRQ
-#if PINCHG_IRQ
-  #if RFM_DEFAULT_IRQ < 8
-    if (nodeID != 0) {
-      bitClear(DDRD, RFM_DEFAULT_IRQ);      // input
-      bitSet(PORTD, RFM_DEFAULT_IRQ);       // pull-up
-      bitSet(PCMSK2, RFM_DEFAULT_IRQ);      // pin-change
-      bitSet(PCICR, PCIE2);         // enable
-    } else
-      bitClear(PCMSK2, RFM_DEFAULT_IRQ);
-  #elif RFM_DEFAULT_IRQ < 14
-    if (nodeID != 0) {
-      bitClear(DDRB, RFM_DEFAULT_IRQ - 8);  // input
-      bitSet(PORTB, RFM_DEFAULT_IRQ - 8);   // pull-up
-      bitSet(PCMSK0, RFM_DEFAULT_IRQ - 8);  // pin-change
-      bitSet(PCICR, PCIE0);         // enable
-    } else
-      bitClear(PCMSK0, RFM_DEFAULT_IRQ - 8);
-  #else
-    if (nodeID != 0) {
-      bitClear(DDRC, RFM_DEFAULT_IRQ - 14); // input
-      bitSet(PORTC, RFM_DEFAULT_IRQ - 14);  // pull-up
-      bitSet(PCMSK1, RFM_DEFAULT_IRQ - 14); // pin-change
-      bitSet(PCICR, PCIE1);         // enable
-    } else
-      bitClear(PCMSK1, RFM_DEFAULT_IRQ - 14);
-  #endif
-#else
-  if (nodeID != 0)
-    attachInterrupt(irq_pin-2, RFM12B::InterruptHandler, LOW);
-  else
-    detachInterrupt(irq_pin-2);
-#endif
+  
+  // Configure IRQ Settings
+  ConfigureInterrupts();
+  
+  return (true);
 }
 
 // access to the RFM12B internal registers with interrupts disabled
 uint16_t RFM12B::Control(uint16_t cmd) {
 #ifdef EIMSK
-    bitClear(EIMSK, irq_pin - 2);
+    //bitClear(EIMSK, irq_pin - 2);
+    cli();
     uint16_t r = XFERSlow(cmd);
-    bitSet(EIMSK, irq_pin - 2);
+    sei();
+    //bitSet(EIMSK, irq_pin - 2);
 #else
   // ATtiny
-  bitClear(GIMSK, INT0);
+  //bitClear(GIMSK, INT0);
+  cli();
   uint16_t r = XFERSlow(cmd);
-  bitSet(GIMSK, INT0);
+  sei();
+  //bitSet(GIMSK, INT0);
 #endif
     return r;
 }
@@ -303,7 +408,7 @@ uint16_t RFM12B::Control(uint16_t cmd) {
   /* ======================================================================
   Function: SetRSSI
   Purpose : Initialise ARSSI settings 
-  Input   : Analog pin to use in ADMUX format so (0 to 7 for A0 to A7)
+  Input   : Analog pin to use in ADMUX pin format so 0..7 = A0..A7
             Value of ARSSI Idle in mV (typically 300 to 700)
   Output  : -
   Comments: When setting ARSSI idle to 0, this disable ARSSI reading 
@@ -311,6 +416,7 @@ uint16_t RFM12B::Control(uint16_t cmd) {
   void RFM12B::SetRSSI(uint8_t _analog_pin, uint16_t _arssi_idle)
   {
     arssi_idle = _arssi_idle;
+    pinMode(_analog_pin+A0, INPUT);
     cli(); 
     arssi_config &= ~RF12_ARSSI_ANALOG_PIN_MASK;
     arssi_config |= (_analog_pin & RF12_ARSSI_ANALOG_PIN_MASK);
@@ -363,7 +469,7 @@ uint16_t RFM12B::Control(uint16_t cmd) {
     int16_t  _vmax;
 
     // Still not finished receiving ?
-    // special value indicating we're receving
+    // special value indicating we're receiving
     // so value can be modified in IRQ so not reliable
     if (rxstate != TXIDLE)
       return (RF12_ARSSI_RECV);
