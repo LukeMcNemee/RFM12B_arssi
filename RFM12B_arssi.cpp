@@ -141,14 +141,14 @@ void RFM12B::ConfigureInterrupts()
         detachInterrupt(irq_pin-2);
     #elif defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
       //  IRQ authorized are D10 (INT0), D11 (INT1) or D2 (INT2)
-      if (irqPin==10 || irqPin==11 || irqpin==2)
+      if (irq_pin==10 || irq_pin==11 || irq_pin==2)
       {
         if (nodeID != 0)
           // INT0 or INT1 for pin D10/D11 and INT3 for pin D2
-          attachInterrupt(irqpin==2?3:irq_pin-10, RFM12B::InterruptHandler, LOW);
+          attachInterrupt(irq_pin==2?3:irq_pin-10, RFM12B::InterruptHandler, LOW);
         else
           // INT0 or INT1 for pin D10/D11 and INT3 for pin D2
-          detachInterrupt(irqpin==2?3:irq_pin-10);
+          detachInterrupt(irq_pin==2?3:irq_pin-10);
       }
     #else
       #error Target not supported for HW Interrupts
