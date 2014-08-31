@@ -144,11 +144,11 @@ void RFM12B::ConfigureInterrupts()
       if (irq_pin==10 || irq_pin==11 || irq_pin==2)
       {
         if (nodeID != 0)
-          // INT0 or INT1 for pin D10/D11 and INT3 for pin D2
-          attachInterrupt(irq_pin==2?3:irq_pin-10, RFM12B::InterruptHandler, LOW);
+          // INT0 or INT1 for pin D10/D11 and INT2 for pin D2
+          attachInterrupt(irq_pin==2?2:irq_pin-10, RFM12B::InterruptHandler, LOW);
         else
-          // INT0 or INT1 for pin D10/D11 and INT3 for pin D2
-          detachInterrupt(irq_pin==2?3:irq_pin-10);
+          // INT0 or INT1 for pin D10/D11 and INT2 for pin D2
+          detachInterrupt(irq_pin==2?2:irq_pin-10);
       }
     #else
       #error Target not supported for HW Interrupts
