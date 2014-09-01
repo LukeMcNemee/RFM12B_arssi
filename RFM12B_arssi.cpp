@@ -56,10 +56,15 @@ Comments: This call should be done BEFORE calling the Initialize
 ====================================================================== */
 void RFM12B::SetCS(uint8_t arduinoPin)
 {
+  // Be sure to pull old CS line to High
+  digitalWrite(cs_pin, 1);
+
+  // Set new pin
   cs_pin = arduinoPin;
 
   // Configure pin as output
   pinMode(cs_pin, OUTPUT);
+  digitalWrite(cs_pin, 1);
 }
 
 /* ======================================================================
@@ -73,23 +78,44 @@ Comments: This call should be done BEFORE calling the Initialize
 ====================================================================== */
 void RFM12B::SetIRQ(uint8_t irqPin)
 {
+
 #if defined(__AVR_ATmega168__) || defined(__AVR_ATmega328P__) || defined(__AVR_ATmega88) || defined(__AVR_ATmega8__) || defined(__AVR_ATmega88__)
-  //  External IRQ authorized are D2 (INT0) or D3 (INT1)
-  if (irqPin==2 || irqPin==3)
+
+    //  External IRQ authorized are D2 (INT0) or D3 (INT1)
+  if (irq_pin==2 || irq_pin==3)
+  {
+    // 1st detach the existing one
+    detachInterrupt(irq_pin-2);
+    
+    // Set new pin
     irq_pin = irqPin;
+  }
   else
+  {
     irq_pin = RFM_DEFAULT_IRQ;
+  }
+  
 #elif defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
-  //  External IRQ authorized are D10 (INT0), D11 (INT1) or D2 (INT2)
-  if (irqPin==10 || irqPin==11 || irqPin==2)
+
+  // INT0 or INT1 for pin D10/D11 and INT2 for pin D2
+  if (irq_pin==10 || irq_pin==11 || irq_pin==2)
+  {
+    // 1st detach the existing one
+    detachInterrupt(irq_pin==2?2:irq_pin-10);
+
     irq_pin = irqPin;
+  }
   else
+  {
+    // Set new pin
     irq_pin = RFM_DEFAULT_IRQ;
+  }
+  
 #else
   #error Target not supported for HW Interrupts
 #endif
-  
-  // Configure pin as input with pull up
+
+  // Configure new pin as input with pull up
   pinMode(irq_pin, INPUT);
   digitalWrite(irq_pin, 1);
 }
@@ -167,8 +193,9 @@ Comments: duration of 20 ms of wait state.
 bool RFM12B::isPresent(uint8_t cspin, uint8_t irqpin) 
 {
   bool found = false;
+  unsigned long start_to;
 
-  // Set hardware we use
+    // Set hardware we use
   SetCS(cspin);
   SetIRQ(irqpin);
 
