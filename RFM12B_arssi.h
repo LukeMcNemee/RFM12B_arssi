@@ -129,11 +129,21 @@
 //#define PINCHG_IRQ 1    // uncomment this to use pin-change interrupts
                           // and set RFM_DEFAULT_IRQ to pin value
 
-#define RFM_DEFAULT_IRQ 2     // default IRQ 2 (can be changed by SetIRQ)
-#define SPI_SS          10    // D10 
-#define SPI_MOSI        11    // PB3, pin 17
-#define SPI_MISO        12    // PB4, pin 18
-#define SPI_SCK         13    // PB5, pin 19
+#if defined(__AVR_ATmega168__) || defined(__AVR_ATmega328P__) || defined(__AVR_ATmega88) || defined(__AVR_ATmega8__) || defined(__AVR_ATmega88__)
+  #define RFM_DEFAULT_IRQ 2   // default IRQ PIN D2 (can be changed by SetIRQ)
+  #define SPI_SS          10  // D10 
+  #define SPI_MOSI        11  // PB3, pin 17
+  #define SPI_MISO        12  // PB4, pin 18
+  #define SPI_SCK         13  // PB5, pin 19
+#elif defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
+  #define RFM_DEFAULT_IRQ 2   // default IRQ PIN D2 -> PB2, pin 3(can be changed by SetIRQ)
+  #define SPI_SS          4   // PB4, pin 5
+  #define SPI_MOSI        5   // PB5, pin 6
+  #define SPI_MISO        6   // PB6, pin 7
+  #define SPI_SCK         7   // PB7, pin 8
+#else
+  #error Target not supported for HW Interrupts
+#endif
 
 // RF12 command codes
 #define RF_RECEIVER_ON  0x82DD
